@@ -13,3 +13,4 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF100"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
