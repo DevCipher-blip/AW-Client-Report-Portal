@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS reports (
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY(client_id) REFERENCES clients(id)
 );
+CREATE INDEX IF NOT EXISTS reports_by_client ON reports(client_id, year);
 """
 
 
@@ -49,9 +50,28 @@ def init_app(app):
     app.teardown_appcontext(close_db)
 
 
-def list_clients():
-    rows = get_db().execute("SELECT id, data, updated_at FROM clients ORDER BY id").fetchall()
-    return [{**json.loads(r["data"]), "id": r["id"], "updated_at": r["updated_at"]} for r in rows]
+CLIENTS_WITH_SUMMARY = """
+SELECT c.id, c.data, c.updated_at,
+    (SELECT COUNT(*) FROM reports r WHERE r.client_id = c.id AND r.year = ?) AS reports_this_year,
+    (SELECT r.quarter || ' ' || r.year FROM reports r WHERE r.client_id = c.id
+     ORDER BY r.year DESC, r.quarter DESC, r.id DESC LIMIT 1) AS last_report
+FROM clients c ORDER BY c.id
+"""
+
+
+def list_clients(year):
+    """Clients with the report summary the dashboard needs, in one query."""
+    rows = get_db().execute(CLIENTS_WITH_SUMMARY, [year]).fetchall()
+    return [
+        {
+            **json.loads(r["data"]),
+            "id": r["id"],
+            "updated_at": r["updated_at"],
+            "reports_this_year": r["reports_this_year"],
+            "last_report": r["last_report"],
+        }
+        for r in rows
+    ]
 
 
 def get_client(cid):

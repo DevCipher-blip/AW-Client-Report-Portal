@@ -5,7 +5,7 @@ let currentReportClientId = null;
 
 // ── DATA ──────────────────────────────────────────────────────────────────
 async function fetchClients() {
-  const res = await fetch('/api/clients');
+  const res = await fetch(`/api/clients?year=${new Date().getFullYear()}`);
   clients = await res.json();
   renderSidebarClients();
 }
@@ -49,16 +49,8 @@ function renderSidebarClients() {
 }
 
 async function renderDashboard() {
-  // Calculate the total reports generated this year
-  let reportsThisYear = 0;
   const currentYear = new Date().getFullYear();
-
-  for (const client of clients) {
-    const res = await fetch(`/api/clients/${client.id}/reports`);
-    const reports = await res.json();
-    const count = reports.filter(r => r.year === currentYear).length;
-    reportsThisYear += count;
-  }
+  const reportsThisYear = clients.reduce((sum, c) => sum + (c.reports_this_year || 0), 0);
 
   document.getElementById('content').innerHTML = `
     <div class="stats-row">

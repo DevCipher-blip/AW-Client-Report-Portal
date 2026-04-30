@@ -45,7 +45,8 @@ def index():
 
 @bp.get("/api/clients")
 def list_clients():
-    return jsonify(db.list_clients())
+    year = request.args.get("year", type=int) or datetime.now().year
+    return jsonify(db.list_clients(year))
 
 
 @bp.post("/api/clients")

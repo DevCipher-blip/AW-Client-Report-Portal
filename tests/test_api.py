@@ -60,3 +60,16 @@ def test_numbers_from_form_strings_are_normalised(client):
     stored = client.get(f"/api/clients/{cid}").get_json()
     assert stored["monthly_salary"] == 15000
     assert stored["age_1"] == 54
+
+
+def test_client_list_carries_report_summary(client):
+    busy = make_client(client)
+    make_client(client, name_1="Priya Raman")
+    for quarter, year in (("Q1", 2025), ("Q2", 2026), ("Q1", 2026)):
+        client.post(f"/api/clients/{busy}/reports", json={"quarter": quarter, "year": year})
+    rows = {r["id"]: r for r in client.get("/api/clients?year=2026").get_json()}
+    assert rows[busy]["reports_this_year"] == 2
+    assert rows[busy]["last_report"] == "Q2 2026"
+    others = [r for cid, r in rows.items() if cid != busy]
+    assert others[0]["reports_this_year"] == 0
+    assert others[0]["last_report"] is None
