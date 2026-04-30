@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 
-from flask import Blueprint, jsonify, render_template, request, send_file
+from flask import Blueprint, current_app, jsonify, render_template, request, send_file
 
 from . import db
 from .pdf import build_sacs_pdf, build_tcc_pdf
@@ -40,7 +40,7 @@ def health():
 
 @bp.get("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", firm_name=current_app.config["FIRM_NAME"])
 
 
 @bp.get("/api/clients")
@@ -115,7 +115,8 @@ def pdf_response(rid, prefix, builder):
     name = safe_filename(
         prefix, client.get("name_1", "Client"), f"{report.get('quarter', '')}{report.get('year', '')}"
     )
-    return send_file(builder(client, report), mimetype="application/pdf", download_name=name)
+    pdf = builder(client, report, firm=current_app.config["FIRM_NAME"])
+    return send_file(pdf, mimetype="application/pdf", download_name=name)
 
 
 @bp.get("/api/reports/<int:rid>/sacs.pdf")

@@ -3,6 +3,7 @@ import os
 from flask import Flask
 
 from . import db, security
+from .pdf import DEFAULT_FIRM
 from .routes import bp
 
 
@@ -13,6 +14,7 @@ def create_app(config=None):
         DATABASE_PATH=os.environ.get("DATABASE_PATH") or os.environ.get("RAILWAY_DATABASE_PATH", "portal.db"),
         PORTAL_USERNAME=os.environ.get("PORTAL_USERNAME", "admin"),
         PORTAL_PASSWORD=os.environ.get("PORTAL_PASSWORD", ""),
+        FIRM_NAME=os.environ.get("FIRM_NAME", DEFAULT_FIRM),
         MAX_CONTENT_LENGTH=256 * 1024,
     )
     if config:

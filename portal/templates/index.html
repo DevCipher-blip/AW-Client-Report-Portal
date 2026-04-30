@@ -3,76 +3,79 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AW Client Report Portal</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<title>Client Report Portal · {{ firm_name }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='portal.css') }}">
+<script src="{{ url_for('static', filename='portal.js') }}" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#content">Skip to content</a>
 
-<div id="sidebar">
-  <div class="sidebar-logo">
-    <h1>Windbrook<br>Solutions</h1>
-    <span>Client Report Portal</span>
+<aside id="sidebar">
+  <div class="brand">
+    <p class="brand-name">{{ firm_name }}</p>
+    <p class="brand-tag">Client Report Portal</p>
   </div>
-  <nav class="sidebar-nav">
-    <div class="nav-section">Navigation</div>
-    <button class="nav-btn active" onclick="showView('dashboard')" id="nav-dashboard">
-      <span class="icon">⊞</span> Dashboard
-    </button>
-    <button class="nav-btn" onclick="showView('clients')" id="nav-clients">
-      <span class="icon">◎</span> Clients
-    </button>
-    <div id="client-list-nav"></div>
-    <button class="nav-btn" onclick="openClientModal()" id="nav-add">
-      <span class="icon">＋</span> Add Client
-    </button>
+  <nav class="sidebar-nav" aria-label="Main">
+    <ul class="nav-list">
+      <li><a class="nav-link" href="#/" data-nav="dashboard">Dashboard</a></li>
+      <li>
+        <a class="nav-link" href="#/clients" data-nav="clients">Clients</a>
+        <ul id="client-nav" class="client-nav"></ul>
+      </li>
+    </ul>
+    <button type="button" class="btn btn-gold sidebar-add" data-action="new-client">Add client</button>
   </nav>
-  <div class="sidebar-footer">AW Client Portal v1.0</div>
-</div>
+</aside>
 
 <div id="main">
-  <div class="topbar">
+  <header class="topbar">
     <div>
-      <div class="topbar-title" id="topbar-title">Dashboard</div>
-      <div class="topbar-sub" id="topbar-sub">Overview of all clients and reports</div>
+      <h1 class="topbar-title" id="topbar-title">Dashboard</h1>
+      <p class="topbar-sub" id="topbar-sub">Overview of all clients and reports</p>
     </div>
-    <div id="topbar-actions"></div>
-  </div>
-  <div id="content"></div>
+    <div class="topbar-actions" id="topbar-actions"></div>
+  </header>
+  <main id="content" tabindex="-1" aria-busy="true">
+    <p class="state">Loading clients…</p>
+  </main>
 </div>
 
-<!-- Client Modal -->
-<div class="modal-overlay" id="client-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <span style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--navy)" id="client-modal-title">Add New Client</span>
-      <button class="modal-close" onclick="closeClientModal()">✕</button>
-    </div>
-    <div class="modal-body" id="client-modal-body"></div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeClientModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveClient()">Save Client</button>
-    </div>
-  </div>
-</div>
+<dialog id="client-dialog" class="dialog" aria-labelledby="client-dialog-title">
+  <form id="client-form" method="dialog" novalidate>
+    <header class="dialog-header">
+      <h2 class="dialog-title" id="client-dialog-title">Add client</h2>
+      <button type="button" class="dialog-close" data-action="close-dialog" aria-label="Close">&times;</button>
+    </header>
+    <div class="dialog-body" id="client-form-body"></div>
+    <p class="form-error" role="alert" hidden></p>
+    <footer class="dialog-footer">
+      <button type="button" class="btn btn-danger" data-action="delete-client" hidden>Delete client</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-outline" data-action="close-dialog">Cancel</button>
+      <button type="submit" class="btn btn-primary">Save client</button>
+    </footer>
+  </form>
+</dialog>
 
-<!-- Report Modal -->
-<div class="modal-overlay" id="report-modal">
-  <div class="modal" style="max-width:820px">
-    <div class="modal-header">
-      <span style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--navy)">Generate Report</span>
-      <button class="modal-close" onclick="closeReportModal()">✕</button>
-    </div>
-    <div class="modal-body" id="report-modal-body"></div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeReportModal()">Cancel</button>
-      <button class="btn btn-gold" onclick="saveReport()">💾 Save & Generate</button>
-    </div>
-  </div>
-</div>
+<dialog id="report-dialog" class="dialog dialog-wide" aria-labelledby="report-dialog-title">
+  <form id="report-form" method="dialog" novalidate>
+    <header class="dialog-header">
+      <h2 class="dialog-title" id="report-dialog-title">New quarterly report</h2>
+      <button type="button" class="dialog-close" data-action="close-dialog" aria-label="Close">&times;</button>
+    </header>
+    <div class="dialog-body" id="report-form-body"></div>
+    <p class="form-error" role="alert" hidden></p>
+    <footer class="dialog-footer">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-outline" data-action="close-dialog">Cancel</button>
+      <button type="submit" class="btn btn-gold">Save report</button>
+    </footer>
+  </form>
+</dialog>
 
-<div id="toast"></div>
-
-<script src="{{ url_for('static', filename='portal.js') }}"></script>
+<div id="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

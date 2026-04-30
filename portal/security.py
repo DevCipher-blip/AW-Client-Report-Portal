@@ -7,6 +7,18 @@ from flask import Response, current_app, request
 
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
+# The UI attaches every handler from portal.js and uses no inline scripts or
+# style attributes, so both can be locked to this origin (plus Google Fonts).
+CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' https://fonts.googleapis.com; "
+    "font-src https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
+
 
 def require_login():
     password = current_app.config.get("PORTAL_PASSWORD")
@@ -44,6 +56,7 @@ def reject_cross_site_writes():
 
 
 def set_headers(response):
+    response.headers.setdefault("Content-Security-Policy", CSP)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "same-origin")

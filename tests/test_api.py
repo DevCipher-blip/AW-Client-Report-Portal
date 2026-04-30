@@ -73,3 +73,15 @@ def test_client_list_carries_report_summary(client):
     others = [r for cid, r in rows.items() if cid != busy]
     assert others[0]["reports_this_year"] == 0
     assert others[0]["last_report"] is None
+
+
+def test_firm_name_is_configurable(tmp_path):
+    from portal import create_app
+
+    app = create_app({"DATABASE_PATH": str(tmp_path / "p.db"), "FIRM_NAME": "Harbor & Pine Advisors"})
+    web = app.test_client()
+    assert "Harbor &amp; Pine Advisors" in web.get("/").get_data(as_text=True)
+    cid = web.post("/api/clients", json={"name_1": "Dana"}).get_json()["id"]
+    rid = web.post(f"/api/clients/{cid}/reports", json={"quarter": "Q1", "year": 2026}).get_json()["id"]
+    text = PdfReader(BytesIO(web.get(f"/api/reports/{rid}/tcc.pdf").data)).pages[0].extract_text()
+    assert "Harbor & Pine Advisors" in text

@@ -11,7 +11,7 @@ from reportlab.pdfgen import canvas
 
 from .finance import fmt_money, household_name, sacs_figures, tcc_totals, to_number
 
-FIRM_NAME = "Windbrook Solutions"
+DEFAULT_FIRM = "Windbrook Solutions"
 
 BLUE = HexColor("#1B3A6B")
 LIGHT_BLUE = HexColor("#2E5FAC")
@@ -52,12 +52,12 @@ def draw_arrow(c, x1, y1, x2, y2, color, width=2):
     c.drawPath(p, fill=1, stroke=0)
 
 
-def draw_header(c, subtitle, client, report):
+def draw_header(c, firm, subtitle, client, report):
     c.setFillColor(BLUE)
     c.rect(0, H - 80, W, 80, fill=1, stroke=0)
     c.setFillColor(WHITE)
     c.setFont("Helvetica-Bold", 18)
-    c.drawString(40, H - 38, FIRM_NAME)
+    c.drawString(40, H - 38, firm)
     c.setFont("Helvetica", 11)
     c.drawString(40, H - 56, subtitle)
     c.setFont("Helvetica-Bold", 11)
@@ -70,12 +70,12 @@ def draw_header(c, subtitle, client, report):
     c.rect(0, H - 84, W, 4, fill=1, stroke=0)
 
 
-def draw_footer(c):
+def draw_footer(c, firm):
     c.setFillColor(BLUE)
     c.rect(0, 0, W, 30, fill=1, stroke=0)
     c.setFillColor(WHITE)
     c.setFont("Helvetica", 8)
-    c.drawString(40, 11, f"{FIRM_NAME} | Confidential")
+    c.drawString(40, 11, f"{firm} | Confidential")
     c.drawRightString(W - 40, 11, f"Generated {datetime.now().strftime('%B %d, %Y')}")
 
 
@@ -89,14 +89,14 @@ def draw_flow_circle(c, cx, cy, r, light, dark, lines):
         c.drawCentredString(cx, cy + dy, text)
 
 
-def build_sacs_pdf(client, report):
+def build_sacs_pdf(client, report, firm=DEFAULT_FIRM):
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
     c.setTitle(f"SACS - {household_name(client)}")
     f = sacs_figures(report)
 
     # Page 1: the cashflow diagram.
-    draw_header(c, "Simple Automated Cash Flow System (SACS)", client, report)
+    draw_header(c, firm, "Simple Automated Cash Flow System (SACS)", client, report)
 
     # Three circles with wide gaps so the arrow labels never get clipped.
     R = 58
@@ -194,11 +194,11 @@ def build_sacs_pdf(client, report):
         c.setFont("Helvetica-Bold", 15)
         c.drawCentredString(bx + bw / 2, box_y + 22, fmt_money(val))
 
-    draw_footer(c)
+    draw_footer(c, firm)
     c.showPage()
 
     # Page 2: account detail.
-    draw_header(c, "Cash Flow — Account Detail", client, report)
+    draw_header(c, firm, "Cash Flow — Account Detail", client, report)
     cards = [
         ("Private Reserve Account", "High-Yield Savings", f["pr_balance"], BLUE),
         (
@@ -233,7 +233,7 @@ def build_sacs_pdf(client, report):
     c.setFont("Helvetica", 8)
     c.drawString(60, y - 36, "Excluding investment accounts")
 
-    draw_footer(c)
+    draw_footer(c, firm)
     c.save()
     buf.seek(0)
     return buf
@@ -253,7 +253,7 @@ def _rate_label(rate):
     return f"Rate: {number:g}%" if number is not None else "Rate: N/A"
 
 
-def build_tcc_pdf(client, report):
+def build_tcc_pdf(client, report, firm=DEFAULT_FIRM):
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
     c.setTitle(f"TCC - {household_name(client)}")
@@ -262,16 +262,16 @@ def build_tcc_pdf(client, report):
     right_x = 40 + col_w + 20
     has_spouse = bool(client.get("name_2"))
 
-    draw_header(c, TCC_TITLE, client, report)
+    draw_header(c, firm, TCC_TITLE, client, report)
     y = H - 120
 
     def need(height):
         """Start a continuation page when the next block would run into the footer."""
         nonlocal y
         if y - height < BOTTOM:
-            draw_footer(c)
+            draw_footer(c, firm)
             c.showPage()
-            draw_header(c, f"{TCC_TITLE} (continued)", client, report)
+            draw_header(c, firm, f"{TCC_TITLE} (continued)", client, report)
             y = H - 110
 
     def section_title(title, color=BLUE):
@@ -394,7 +394,7 @@ def build_tcc_pdf(client, report):
         ink=RED,
     )
 
-    draw_footer(c)
+    draw_footer(c, firm)
     c.save()
     buf.seek(0)
     return buf

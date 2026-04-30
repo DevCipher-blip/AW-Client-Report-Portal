@@ -105,3 +105,14 @@ def test_login_required_when_password_set(locked):
 
 def test_healthcheck_stays_open_behind_login(locked):
     assert locked.get("/healthz").status_code == 200
+
+
+def test_page_runs_under_strict_csp(client):
+    res = client.get("/")
+    csp = res.headers["Content-Security-Policy"]
+    assert "script-src 'self';" in csp
+    assert "unsafe-inline" not in csp
+    html = res.get_data(as_text=True)
+    assert "onclick=" not in html and "<script>" not in html and "style=" not in html
+    js = client.get("/static/portal.js").get_data(as_text=True)
+    assert "onclick=" not in js and "style=" not in js
