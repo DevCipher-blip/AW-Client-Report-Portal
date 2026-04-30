@@ -9,11 +9,18 @@ def make_client(client, **extra):
 
 def test_blank_balances_still_produce_pdfs(client):
     cid = make_client(client)
-    rid = client.post(f"/api/clients/{cid}/reports", json={
-        "quarter": "Q2", "year": 2026, "inflow": 9000, "outflow": 6000,
-        "private_reserve_balance": "", "trust_value": "",
-        "liabilities": [{"type": "Mortgage", "balance": ""}],
-    }).get_json()["id"]
+    rid = client.post(
+        f"/api/clients/{cid}/reports",
+        json={
+            "quarter": "Q2",
+            "year": 2026,
+            "inflow": 9000,
+            "outflow": 6000,
+            "private_reserve_balance": "",
+            "trust_value": "",
+            "liabilities": [{"type": "Mortgage", "balance": ""}],
+        },
+    ).get_json()["id"]
     for kind in ("sacs", "tcc"):
         res = client.get(f"/api/reports/{rid}/{kind}.pdf")
         assert res.status_code == 200
