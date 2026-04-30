@@ -1,0 +1,37 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv
+venv/
+*.db
+*.sqlite
+.DS_Store
+
+# Local environments and generated files
+.venv/
+env/
+project_venv/
+node_modules/
+*.pyc
+.pytest_cache/
+.env.*
+!.env.example
+!.env.sample
+
+# Databases
+*.sqlite3
+*.db-journal
+data/
+
+# Tooling, build and test output
+.ruff_cache/
+.coverage
+coverage/
+htmlcov/
+build/
+dist/
+*.log
+logs/
+tmp/
+.github/
