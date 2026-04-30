@@ -1,8 +1,10 @@
-# AW Client Report Portal
+# Client reporting portal
 
-A portal for the Windbrook Solutions team to enter client financial data and generate polished quarterly **SACS** (cashflow) and **TCC** (net worth) PDF reports — in minutes instead of a full day.
+## From stored report to PDF
 
----
+Create client and report records, then generate the corresponding SACS or TCC PDF through the Flask routes in [app.py](app.py). SQLite stores JSON-backed client/report data; ReportLab draws the exported documents.
+
+The portal combines persistence, HTTP routes, HTML, and PDF layout in one module. Separating calculation rules from drawing code would make business-rule tests and layout changes easier. Review access control and the report formulas before using real client information; the repository does not provide a validated financial-rules test suite.
 
 ## What It Does
 
