@@ -55,9 +55,15 @@ def list_clients():
         result.append(d)
     return jsonify(result)
 
+def json_object():
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else None
+
 @app.route("/api/clients", methods=["POST"])
 def create_client():
-    data = request.json
+    data = json_object()
+    if data is None:
+        return jsonify({"error": "expected a JSON object"}), 400
     db = get_db()
     cur = db.execute("INSERT INTO clients (data) VALUES (?)", [json.dumps(data)])
     db.commit()
@@ -78,12 +84,16 @@ def get_client(cid):
 
 @app.route("/api/clients/<int:cid>", methods=["PUT"])
 def update_client(cid):
-    data = request.json
+    data = json_object()
+    if data is None:
+        return jsonify({"error": "expected a JSON object"}), 400
     db = get_db()
-    db.execute("UPDATE clients SET data=?, updated_at=datetime('now') WHERE id=?",
-               [json.dumps(data), cid])
+    cur = db.execute("UPDATE clients SET data=?, updated_at=datetime('now') WHERE id=?",
+                     [json.dumps(data), cid])
     db.commit()
     db.close()
+    if cur.rowcount == 0:
+        return jsonify({"error": "not found"}), 404
     return jsonify({"id": cid, **data})
 
 @app.route("/api/clients/<int:cid>", methods=["DELETE"])
@@ -99,7 +109,7 @@ def delete_client(cid):
 def list_reports(cid):
     db = get_db()
     rows = db.execute(
-        "SELECT id, quarter, year, report_data, created_at FROM reports WHERE client_id=? ORDER BY year DESC, quarter DESC",
+        "SELECT id, quarter, year, report_data, created_at FROM reports WHERE client_id=? ORDER BY year DESC, quarter DESC, id DESC",
         [cid]).fetchall()
     db.close()
     result = []
@@ -114,10 +124,15 @@ def list_reports(cid):
 
 @app.route("/api/clients/<int:cid>/reports", methods=["POST"])
 def save_report(cid):
-    data = request.json
+    data = json_object()
+    if data is None:
+        return jsonify({"error": "expected a JSON object"}), 400
     quarter = data.get("quarter", "Q1")
     year = data.get("year", datetime.now().year)
     db = get_db()
+    if not db.execute("SELECT 1 FROM clients WHERE id=?", [cid]).fetchone():
+        db.close()
+        return jsonify({"error": "not found"}), 404
     cur = db.execute(
         "INSERT INTO reports (client_id, quarter, year, report_data) VALUES (?,?,?,?)",
         [cid, quarter, year, json.dumps(data)])
@@ -134,7 +149,7 @@ def download_sacs(rid):
     if not row:
         return "Not found", 404
     report = json.loads(row["report_data"])
-    client = json.loads(row["c.data"] if "c.data" in row.keys() else row[1])
+    client = json.loads(row["data"])
     buf = generate_sacs_pdf(client, report)
     return send_file(buf, mimetype="application/pdf",
                      download_name=f"SACS_{client.get('name_1','Client')}_{report.get('quarter','')}{report.get('year','')}.pdf")
@@ -147,7 +162,7 @@ def download_tcc(rid):
     if not row:
         return "Not found", 404
     report = json.loads(row["report_data"])
-    client = json.loads(row["c.data"] if "c.data" in row.keys() else row[1])
+    client = json.loads(row["data"])
     buf = generate_tcc_pdf(client, report)
     return send_file(buf, mimetype="application/pdf",
                      download_name=f"TCC_{client.get('name_1','Client')}_{report.get('quarter','')}{report.get('year','')}.pdf")
@@ -166,12 +181,15 @@ WHITE = colors.white
 BLACK = colors.black
 GOLD = HexColor("#C8A951")
 
-def fmt_money(val):
+def to_number(val):
+    """Form fields arrive as strings and are often left blank; treat those as 0."""
     try:
-        v = float(val)
-        return f"${v:,.0f}"
-    except:
-        return "$0"
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+def fmt_money(val):
+    return f"${to_number(val):,.0f}"
 
 def draw_circle(c, cx, cy, r, fill_color, stroke_color=None, stroke_width=2):
     c.setFillColor(fill_color)
@@ -232,11 +250,11 @@ def generate_sacs_pdf(client, report):
     c.rect(0, H - 84, W, 4, fill=1, stroke=0)
 
     # Calculations
-    inflow = float(report.get("inflow", 0))
-    outflow = float(report.get("outflow", 0))
+    inflow = to_number(report.get("inflow", 0))
+    outflow = to_number(report.get("outflow", 0))
     excess = inflow - outflow
-    pr_balance = float(report.get("private_reserve_balance", 0))
-    pr_target = float(report.get("private_reserve_target", 0))
+    pr_balance = to_number(report.get("private_reserve_balance", 0))
+    pr_target = to_number(report.get("private_reserve_target", 0))
 
     # Layout: three circles with generous gaps so labels never get clipped.
     # Page W=612. We use margins of 50 each side → usable = 512.
@@ -378,10 +396,10 @@ def generate_sacs_pdf(client, report):
     c.rect(0, H - 84, W, 4, fill=1, stroke=0)
 
     # Account detail cards
-    schwab_balance = float(report.get("schwab_balance", 0))
-    schwab_cash = float(report.get("schwab_cash", 0))
-    pinnacle_checking = float(report.get("pinnacle_checking", 0))
-    pinnacle_savings = float(report.get("pinnacle_savings", 0))
+    schwab_balance = to_number(report.get("schwab_balance", 0))
+    schwab_cash = to_number(report.get("schwab_cash", 0))
+    pinnacle_checking = to_number(report.get("pinnacle_checking", 0))
+    pinnacle_savings = to_number(report.get("pinnacle_savings", 0))
 
     cards = [
         ("Private Reserve Account", "High-Yield Savings", pr_balance, BLUE),
@@ -496,7 +514,7 @@ def generate_tcc_pdf(client, report):
         if cash is not None:
             c.setFont("Helvetica", 7)
             c.drawRightString(cx + col_w - 8, cy - 32, f"cash: {fmt_money(cash)}")
-        return float(balance) if balance else 0
+        return to_number(balance)
 
     # Client 1 retirement
     ret_accounts_1 = report.get("retirement_1", [])
@@ -567,7 +585,7 @@ def generate_tcc_pdf(client, report):
 
     # ── TRUST ──
     trust_y = nr_y - 55
-    trust_val = float(report.get("trust_value", 0))
+    trust_val = to_number(report.get("trust_value", 0))
     trust_addr = report.get("trust_address", "Property")
     totals["trust"] = trust_val
 
@@ -611,7 +629,7 @@ def generate_tcc_pdf(client, report):
     liabilities = report.get("liabilities", [])
     lx = 40
     for liab in liabilities:
-        v = float(liab.get("balance", 0))
+        v = to_number(liab.get("balance", 0))
         totals["liab"] += v
         c.setFillColor(LIGHT_RED)
         c.roundRect(lx, liab_y - 38, col_w, 35, 6, fill=1, stroke=0)
@@ -1495,7 +1513,7 @@ function addAccount(type, existing) {
     <div class="form-group" style="flex:2">
       <label>Type</label>
       <select class="acct-type">
-        ${opts.map(o => `<option ${existing && existing.type===o ? 'selected':''}">${o}</option>`).join('')}
+        ${opts.map(o => `<option ${existing && existing.type===o ? 'selected':''}>${o}</option>`).join('')}
         <option value="custom" ${existing && !opts.includes(existing.type) ? 'selected':''}>Custom...</option>
       </select>
     </div>
