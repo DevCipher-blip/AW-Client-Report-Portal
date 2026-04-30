@@ -85,3 +85,14 @@ def test_firm_name_is_configurable(tmp_path):
     rid = web.post(f"/api/clients/{cid}/reports", json={"quarter": "Q1", "year": 2026}).get_json()["id"]
     text = PdfReader(BytesIO(web.get(f"/api/reports/{rid}/tcc.pdf").data)).pages[0].extract_text()
     assert "Harbor & Pine Advisors" in text
+
+
+def test_seed_demo_adds_fictional_households_once(app, client):
+    runner = app.test_cli_runner()
+    assert "Added 3 demo households" in runner.invoke(args=["seed-demo"]).output
+    assert "already exist" in runner.invoke(args=["seed-demo"]).output
+    clients = client.get("/api/clients?year=2026").get_json()
+    assert [c["last_report"] for c in clients] == ["Q3 2026", "Q3 2026", None]
+    for c in clients:
+        for report in client.get(f"/api/clients/{c['id']}/reports").get_json():
+            assert client.get(f"/api/reports/{report['id']}/tcc.pdf").status_code == 200

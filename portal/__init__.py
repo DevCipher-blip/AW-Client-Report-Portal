@@ -3,6 +3,7 @@ import os
 from flask import Flask
 
 from . import db, security
+from .demo import seed_demo
 from .pdf import DEFAULT_FIRM
 from .routes import bp
 
@@ -23,4 +24,5 @@ def create_app(config=None):
     db.init_app(app)
     security.init_app(app)
     app.register_blueprint(bp)
+    app.cli.add_command(seed_demo)
     return app

@@ -1,0 +1,16 @@
+.git
+.github
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+project_venv/
+node_modules/
+docs/
+tests/

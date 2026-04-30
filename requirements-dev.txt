@@ -1,4 +1,4 @@
 -r requirements.txt
-pytest
-pypdf
-ruff
+pytest==9.2.0
+pypdf==7.0.0
+ruff==0.17.4
