@@ -78,8 +78,9 @@ def update_client(cid, data):
 def delete_client(cid):
     conn = get_db()
     conn.execute("DELETE FROM reports WHERE client_id=?", [cid])
-    conn.execute("DELETE FROM clients WHERE id=?", [cid])
+    cur = conn.execute("DELETE FROM clients WHERE id=?", [cid])
     conn.commit()
+    return cur.rowcount > 0
 
 
 def list_reports(cid):

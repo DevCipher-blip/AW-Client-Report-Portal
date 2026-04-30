@@ -45,3 +45,18 @@ def test_reports_list_newest_first_within_quarter(client):
     second = client.post(f"/api/clients/{cid}/reports", json={"quarter": "Q1", "year": 2026}).get_json()["id"]
     ids = [r["id"] for r in client.get(f"/api/clients/{cid}/reports").get_json()]
     assert ids == [second, first]
+
+
+def test_delete_client_removes_reports(client):
+    cid = make_client(client)
+    client.post(f"/api/clients/{cid}/reports", json={"quarter": "Q1", "year": 2026})
+    assert client.delete(f"/api/clients/{cid}").status_code == 200
+    assert client.get(f"/api/clients/{cid}/reports").get_json() == []
+    assert client.delete(f"/api/clients/{cid}").status_code == 404
+
+
+def test_numbers_from_form_strings_are_normalised(client):
+    cid = make_client(client, monthly_salary="15000", age_1="54")
+    stored = client.get(f"/api/clients/{cid}").get_json()
+    assert stored["monthly_salary"] == 15000
+    assert stored["age_1"] == 54

@@ -1,9 +1,11 @@
+import re
 from datetime import datetime
 
 from flask import Blueprint, jsonify, render_template, request, send_file
 
 from . import db
 from .pdf import build_sacs_pdf, build_tcc_pdf
+from .validation import Invalid, clean_client, clean_report
 
 bp = Blueprint("portal", __name__)
 
@@ -21,6 +23,21 @@ def not_found():
     return jsonify({"error": "not found"}), 404
 
 
+def invalid(exc):
+    return jsonify({"error": "invalid fields", "fields": exc.fields}), 400
+
+
+def safe_filename(*parts):
+    """Client names end up in Content-Disposition; keep them to plain filename characters."""
+    stem = "_".join(re.sub(r"[^A-Za-z0-9-]+", "-", str(p)).strip("-") or "x" for p in parts)
+    return f"{stem}.pdf"
+
+
+@bp.get("/healthz")
+def health():
+    return jsonify({"ok": True})
+
+
 @bp.get("/")
 def index():
     return render_template("index.html")
@@ -36,6 +53,10 @@ def create_client():
     data = json_object()
     if data is None:
         return bad_body()
+    try:
+        data = clean_client(data)
+    except Invalid as exc:
+        return invalid(exc)
     return jsonify({**data, "id": db.create_client(data)})
 
 
@@ -50,6 +71,10 @@ def update_client(cid):
     data = json_object()
     if data is None:
         return bad_body()
+    try:
+        data = clean_client(data)
+    except Invalid as exc:
+        return invalid(exc)
     if not db.update_client(cid, data):
         return not_found()
     return jsonify({**data, "id": cid})
@@ -57,7 +82,8 @@ def update_client(cid):
 
 @bp.delete("/api/clients/<int:cid>")
 def delete_client(cid):
-    db.delete_client(cid)
+    if not db.delete_client(cid):
+        return not_found()
     return jsonify({"ok": True})
 
 
@@ -73,9 +99,11 @@ def save_report(cid):
         return bad_body()
     if not db.get_client(cid):
         return not_found()
-    quarter = data.get("quarter", "Q1")
-    year = data.get("year", datetime.now().year)
-    return jsonify({"id": db.create_report(cid, quarter, year, data)})
+    try:
+        data = clean_report(data, default_year=datetime.now().year)
+    except Invalid as exc:
+        return invalid(exc)
+    return jsonify({"id": db.create_report(cid, data["quarter"], data["year"], data)})
 
 
 def pdf_response(rid, prefix, builder):
@@ -83,8 +111,8 @@ def pdf_response(rid, prefix, builder):
     if not found:
         return "Not found", 404
     client, report = found
-    name = (
-        f"{prefix}_{client.get('name_1', 'Client')}_{report.get('quarter', '')}{report.get('year', '')}.pdf"
+    name = safe_filename(
+        prefix, client.get("name_1", "Client"), f"{report.get('quarter', '')}{report.get('year', '')}"
     )
     return send_file(builder(client, report), mimetype="application/pdf", download_name=name)
 
