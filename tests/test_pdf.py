@@ -60,3 +60,29 @@ def test_pdfs_render_with_empty_report():
     for build in (build_sacs_pdf, build_tcc_pdf):
         _, pages = read(build({"name_1": "Solo"}, {}))
         assert pages and "Solo" in pages[0]
+
+
+def test_tcc_flows_onto_continuation_pages_without_dropping_totals():
+    many = [{"type": "401K", "acct_num": f"{i:04d}", "balance": "1000"} for i in range(8)]
+    report = {
+        **REPORT,
+        "retirement_1": many,
+        "retirement_2": many,
+        "non_retirement": [{"type": "Brokerage", "balance": "500"}] * 6,
+        "liabilities": [{"type": "HELOC", "rate": "", "balance": "100"}] * 6,
+    }
+    reader, pages = read(build_tcc_pdf(CLIENT, report))
+    assert len(pages) >= 2
+    assert "(continued)" in pages[1]
+    text = "\n".join(pages)
+    assert "Total Liabilities (not subtracted from net worth)" in text
+    assert "$600" in text
+    assert "Rate: N/A" in text
+    # Every page, including continuations, keeps its footer.
+    assert all("Confidential" in p for p in pages)
+
+
+def test_typical_household_fits_on_one_tcc_page():
+    _, pages = read(build_tcc_pdf(CLIENT, REPORT))
+    assert len(pages) == 1
+    assert "Rate: 3.1%" in pages[0]

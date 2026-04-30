@@ -239,54 +239,68 @@ def build_sacs_pdf(client, report):
     return buf
 
 
+TCC_TITLE = "Total Client Chart (TCC) — Net Worth Overview"
+ROW = 48
+BOTTOM = 44  # keep content clear of the 30pt footer band
+
+
+def _pairs(items):
+    return [items[i : i + 2] for i in range(0, len(items), 2)]
+
+
+def _rate_label(rate):
+    number = to_number(rate) if rate not in (None, "") else None
+    return f"Rate: {number:g}%" if number is not None else "Rate: N/A"
+
+
 def build_tcc_pdf(client, report):
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
     c.setTitle(f"TCC - {household_name(client)}")
     totals = tcc_totals(client, report)
     col_w = (W - 80) / 2 - 10
+    right_x = 40 + col_w + 20
+    has_spouse = bool(client.get("name_2"))
 
-    draw_header(c, "Total Client Chart (TCC) — Net Worth Overview", client, report)
+    draw_header(c, TCC_TITLE, client, report)
+    y = H - 120
 
-    bubble_y = H - 120
-    for i, suffix in enumerate(("1", "2")):
-        name = client.get(f"name_{suffix}", "")
-        if not name:
-            continue
-        bx = 40 + i * (W / 2 - 50)
-        c.setFillColor(LIGHT_GREEN)
-        c.roundRect(bx, bubble_y - 45, W / 2 - 60, 42, 8, fill=1, stroke=0)
-        c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(bx + 12, bubble_y - 18, name)
-        c.setFont("Helvetica", 8)
-        dob = client.get(f"dob_{suffix}") or "N/A"
-        age = client.get(f"age_{suffix}") or "N/A"
-        ssn = client.get(f"ssn_{suffix}") or "0000"
-        c.drawString(bx + 12, bubble_y - 34, f"DOB: {dob}  |  Age: {age}  |  SSN: xxx-xx-{ssn}")
+    def need(height):
+        """Start a continuation page when the next block would run into the footer."""
+        nonlocal y
+        if y - height < BOTTOM:
+            draw_footer(c)
+            c.showPage()
+            draw_header(c, f"{TCC_TITLE} (continued)", client, report)
+            y = H - 110
 
-    def section_title(y, title, color=BLUE):
+    def section_title(title, color=BLUE):
+        nonlocal y
+        need(20 + ROW)
         c.setFillColor(color)
         c.setFont("Helvetica-Bold", 10)
         c.drawString(40, y, title)
         c.setFillColor(GOLD)
         c.rect(40, y - 4, W - 80, 2, fill=1, stroke=0)
+        y -= 20
 
-    def account_bubble(x, y, acct_type, acct_num, balance, cash=None, color=BLUE):
+    def account_bubble(x, acct, default_type, color, detail=None, cash=None):
         c.setFillColor(color)
         c.roundRect(x, y - 38, col_w, 35, 6, fill=1, stroke=0)
         c.setFillColor(WHITE)
         c.setFont("Helvetica-Bold", 9)
-        c.drawString(x + 8, y - 15, acct_type)
+        c.drawString(x + 8, y - 15, acct.get("type") or default_type)
         c.setFont("Helvetica", 7.5)
-        c.drawString(x + 8, y - 27, f"acct ...{acct_num}" if acct_num else "")
+        if detail is None:
+            detail = f"acct ...{acct['acct_num']}" if acct.get("acct_num") else ""
+        c.drawString(x + 8, y - 27, detail)
         c.setFont("Helvetica-Bold", 11)
-        c.drawRightString(x + col_w - 8, y - 20, fmt_money(balance))
-        if cash is not None:
+        c.drawRightString(x + col_w - 8, y - 20, fmt_money(acct.get("balance", 0)))
+        if cash not in (None, ""):
             c.setFont("Helvetica", 7)
             c.drawRightString(x + col_w - 8, y - 32, f"cash: {fmt_money(cash)}")
 
-    def total_bar(x, y, width, label, value, fill=GRAY, ink=DARK_GRAY):
+    def total_bar(x, width, label, value, fill=GRAY, ink=DARK_GRAY):
         c.setFillColor(fill)
         c.roundRect(x, y - 32, width, 28, 6, fill=1, stroke=0)
         c.setFillColor(ink)
@@ -295,106 +309,90 @@ def build_tcc_pdf(client, report):
         c.setFont("Helvetica-Bold", 12)
         c.drawRightString(x + width - 8, y - 14, fmt_money(value))
 
-    ret_y = bubble_y - 70
-    section_title(ret_y, "RETIREMENT ACCOUNTS")
-    ret_y -= 20
+    for i, suffix in enumerate(("1", "2")):
+        name = client.get(f"name_{suffix}", "")
+        if not name:
+            continue
+        bx = 40 + i * (W / 2 - 50)
+        c.setFillColor(LIGHT_GREEN)
+        c.roundRect(bx, y - 45, W / 2 - 60, 42, 8, fill=1, stroke=0)
+        c.setFillColor(WHITE)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(bx + 12, y - 18, name)
+        c.setFont("Helvetica", 8)
+        dob = client.get(f"dob_{suffix}") or "N/A"
+        age = client.get(f"age_{suffix}") or "N/A"
+        ssn = client.get(f"ssn_{suffix}") or "0000"
+        c.drawString(bx + 12, y - 34, f"DOB: {dob}  |  Age: {age}  |  SSN: xxx-xx-{ssn}")
+    y -= 70
 
-    ay = ret_y
-    for acct in report.get("retirement_1", []):
-        account_bubble(40, ay, acct.get("type", "IRA"), acct.get("acct_num", ""), acct.get("balance", 0))
-        ay -= 48
-    min_y = ay
-    if client.get("name_2"):
-        ay2 = ret_y
-        for acct in report.get("retirement_2", []):
-            account_bubble(
-                40 + col_w + 20,
-                ay2,
-                acct.get("type", "IRA"),
-                acct.get("acct_num", ""),
-                acct.get("balance", 0),
-                color=LIGHT_BLUE,
-            )
-            ay2 -= 48
-        min_y = min(ay, ay2)
+    # Retirement: one column per spouse, drawn row by row so a page break keeps them aligned.
+    section_title("RETIREMENT ACCOUNTS")
+    left = report.get("retirement_1") or []
+    right = (report.get("retirement_2") or []) if has_spouse else []
+    for row in range(max(len(left), len(right))):
+        need(ROW)
+        if row < len(left):
+            account_bubble(40, left[row], "IRA", BLUE)
+        if row < len(right):
+            account_bubble(right_x, right[row], "IRA", LIGHT_BLUE)
+        y -= ROW
+    y -= 10
+    need(40)
+    total_bar(40, col_w, f"{client.get('name_1', 'Client 1')} Retirement Total", totals["ret1"])
+    if has_spouse:
+        total_bar(right_x, col_w, f"{client['name_2']} Retirement Total", totals["ret2"])
+    y -= 55
 
-    min_y -= 10
-    total_bar(40, min_y, col_w, f"{client.get('name_1', 'Client 1')} Retirement Total", totals["ret1"])
-    if client.get("name_2"):
-        total_bar(40 + col_w + 20, min_y, col_w, f"{client['name_2']} Retirement Total", totals["ret2"])
+    section_title("NON-RETIREMENT ACCOUNTS")
+    for pair in _pairs(report.get("non_retirement") or []):
+        need(ROW)
+        for x, acct in zip((40, right_x), pair, strict=False):
+            account_bubble(x, acct, "Brokerage", LIGHT_BLUE, cash=acct.get("cash"))
+        y -= ROW
+    y -= 2
+    need(40)
+    total_bar(40, W - 80, "Non-Retirement Total", totals["nonret"])
+    y -= 55
 
-    nr_y = min_y - 55
-    section_title(nr_y, "NON-RETIREMENT ACCOUNTS")
-    nr_y -= 20
-    nr_x = 40
-    for acct in report.get("non_retirement", []):
-        account_bubble(
-            nr_x,
-            nr_y,
-            acct.get("type", "Brokerage"),
-            acct.get("acct_num", ""),
-            acct.get("balance", 0),
-            acct.get("cash"),
-            color=LIGHT_BLUE,
-        )
-        nr_x += col_w + 20
-        if nr_x + col_w > W - 40:
-            nr_x = 40
-            nr_y -= 48
-    nr_y -= 50
-    total_bar(40, nr_y, W - 80, "Non-Retirement Total", totals["nonret"])
-
-    trust_y = nr_y - 55
-    section_title(trust_y, "TRUST")
-    trust_y -= 20
+    section_title("TRUST")
     c.setFillColor(DARK_GRAY)
-    c.roundRect(40, trust_y - 38, W - 80, 35, 6, fill=1, stroke=0)
+    c.roundRect(40, y - 38, W - 80, 35, 6, fill=1, stroke=0)
     c.setFillColor(WHITE)
     c.setFont("Helvetica-Bold", 9)
-    c.drawString(52, trust_y - 16, f"Primary Residence — {report.get('trust_address', 'Property')}")
+    c.drawString(52, y - 16, f"Primary Residence — {report.get('trust_address') or 'Property'}")
     c.setFont("Helvetica", 8)
-    c.drawString(52, trust_y - 28, "Zillow Zestimate")
+    c.drawString(52, y - 28, "Zillow Zestimate")
     c.setFont("Helvetica-Bold", 14)
-    c.drawRightString(W - 48, trust_y - 22, fmt_money(totals["trust"]))
+    c.drawRightString(W - 48, y - 22, fmt_money(totals["trust"]))
+    y -= 60
 
-    gt_y = trust_y - 60
+    need(45)
     c.setFillColor(BLUE)
-    c.roundRect(40, gt_y - 38, W - 80, 35, 8, fill=1, stroke=0)
+    c.roundRect(40, y - 38, W - 80, 35, 8, fill=1, stroke=0)
     c.setFillColor(WHITE)
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(52, gt_y - 16, "Grand Total Net Worth")
+    c.drawString(52, y - 16, "Grand Total Net Worth")
     c.setFont("Helvetica-Bold", 18)
-    c.drawRightString(W - 48, gt_y - 20, fmt_money(totals["grand"]))
+    c.drawRightString(W - 48, y - 20, fmt_money(totals["grand"]))
+    y -= 65
 
-    liab_y = gt_y - 65
-    section_title(liab_y, "LIABILITIES", RED)
-    liab_y -= 20
-    lx = 40
-    for liab in report.get("liabilities", []):
-        c.setFillColor(LIGHT_RED)
-        c.roundRect(lx, liab_y - 38, col_w, 35, 6, fill=1, stroke=0)
-        c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 9)
-        c.drawString(lx + 8, liab_y - 15, liab.get("type", "Mortgage"))
-        c.setFont("Helvetica", 7.5)
-        c.drawString(lx + 8, liab_y - 27, f"Rate: {liab.get('rate', 'N/A')}%")
-        c.setFont("Helvetica-Bold", 11)
-        c.drawRightString(lx + col_w - 8, liab_y - 20, fmt_money(to_number(liab.get("balance", 0))))
-        lx += col_w + 20
-        if lx + col_w > W - 40:
-            lx = 40
-            liab_y -= 48
-    liab_y -= 50
-    if liab_y > 40:
-        total_bar(
-            40,
-            liab_y,
-            W - 80,
-            "Total Liabilities (not subtracted from net worth)",
-            totals["liab"],
-            fill=HexColor("#FFEBEE"),
-            ink=RED,
-        )
+    section_title("LIABILITIES", RED)
+    for pair in _pairs(report.get("liabilities") or []):
+        need(ROW)
+        for x, liab in zip((40, right_x), pair, strict=False):
+            account_bubble(x, liab, "Mortgage", LIGHT_RED, detail=_rate_label(liab.get("rate")))
+        y -= ROW
+    y -= 2
+    need(40)
+    total_bar(
+        40,
+        W - 80,
+        "Total Liabilities (not subtracted from net worth)",
+        totals["liab"],
+        fill=HexColor("#FFEBEE"),
+        ink=RED,
+    )
 
     draw_footer(c)
     c.save()
